@@ -17,7 +17,9 @@ add_library( # Sets the name of the library.
         SHARED
 
         # Provides a relative path to your source file(s).
-        src/main/cpp/native-bridge.cpp)
+        src/main/cpp/native-bridge.cpp
+        src/main/cpp/OpenSL_ES_Test.h
+        src/main/cpp/OpenSL_ES_Test.cpp)
 
 
 # Searches for a specified prebuilt library and stores the path as a
@@ -46,6 +48,8 @@ message(STATUS "project source" ${PROJECT_SOURCE_DIR})
 # 需要注意一点，引入的第三方so库这里必须要包含
 target_link_libraries( # Specifies the target library.
         native-bridge
+        android
+        OpenSLES
 
         # Links the target library to the log library
         # included in the NDK.

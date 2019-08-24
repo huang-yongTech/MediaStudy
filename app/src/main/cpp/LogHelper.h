@@ -1,11 +1,10 @@
 ﻿//
 // Created by huangyong on 2019/8/11.
 //
-
-#include <android/log.h>
-
 #ifndef JNISTUDY_LOGHELPER_H
 #define JNISTUDY_LOGHELPER_H
+
+#include <android/log.h>
 
 #define TAG "media-study-native-bridge" // 这个是自定义的LOG的标识
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, TAG, __VA_ARGS__) // 定义LOGD类型
