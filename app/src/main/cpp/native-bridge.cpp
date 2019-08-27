@@ -24,12 +24,9 @@ static const char *mClassName = "com/hy/ndk/mediastudy/MediaTest";
 JavaVM *g_jvm = nullptr;
 jobject g_jobj = nullptr;
 
-OpenSLTest *openSlTest;
-
 void init(JNIEnv *env, jobject instance) {
     LOGI("native层init初始化");
     g_jobj = env->NewGlobalRef(instance);
-    openSlTest = new OpenSLTest;
 }
 
 void destroy(JNIEnv *env, jobject instance) {
@@ -37,62 +34,74 @@ void destroy(JNIEnv *env, jobject instance) {
     env->DeleteGlobalRef(g_jobj);
 }
 
+void createEngine(JNIEnv *env, jobject instance) {
+    createEngine_();
+}
+
 void createBufferQueueAudioPlayer(JNIEnv *env, jobject instance,
                                   jint sampleRate, jint bufSize) {
-    openSlTest->createBufferQueueAudioPlayer(sampleRate, bufSize);
+    createBufferQueueAudioPlayer_(sampleRate, bufSize);
 }
 
 void playClip(JNIEnv *env, jobject instance, jint which, jint count) {
-    openSlTest->playClip(which, count);
+    playClip_(which, count);
 }
 
-void createAssetsAudioPlayer(JNIEnv *env, jobject instance,
-                             jobject assetManager, jstring fileName) {
-    openSlTest->createAssetsAudioPlayer(assetManager, fileName);
+//参数含有安卓相关参数的最好使用静态注册，动态注册在方法签名上面会有一些未知错误
+JNIEXPORT jboolean JNICALL
+Java_com_hy_ndk_mediastudy_MediaTest_createAssetsAudioPlayer(JNIEnv *env, jobject instance,
+                                                             jobject assetManager,
+                                                             jstring fileName) {
+    return createAssetsAudioPlayer_(env, instance, assetManager, fileName);
 }
 
-void playAssets(JNIEnv *env, jobject instance) {
-    openSlTest->playAssets();
+void playAssets(JNIEnv *env, jobject instance, jboolean isPlaying) {
+    playAssets_(isPlaying);
 }
 
-void playPCM(JNIEnv *env, jobject instance) {
-    openSlTest->playPCM();
+jboolean createPcmAudioPlayer(JNIEnv *env, jobject instance, jstring fileName) {
+    return createPcmAudioPlayer_(env, instance, fileName);
 }
 
-void createAudioRecorder(JNIEnv *env, jobject instance) {
-    openSlTest->createAudioRecorder();
+void playPCM(JNIEnv *env, jobject instance, jboolean isPlaying) {
+    playPCM_(isPlaying);
+}
+
+jboolean createAudioRecorder(JNIEnv *env, jobject instance) {
+    return createAudioRecorder_();
 }
 
 void startRecord(JNIEnv *env, jobject instance) {
-    openSlTest->startRecord();
+    startRecord_();
 }
 
 void stopRecord(JNIEnv *env, jobject instance) {
-    openSlTest->stopRecord();
+    stopRecord_();
 }
 
 void playRecord(JNIEnv *env, jobject instance) {
-    openSlTest->playRecord();
+    playRecord_();
 }
 
 void shutdown(JNIEnv *env, jobject instance) {
-    delete openSlTest;
+    destroy_();
 }
 
 //静态的native方法签名数组
 static const JNINativeMethod method[] = {
-        {"init",                         "()V",                                     (void *) init},
-        {"destroy",                      "()V",                                     (void *) destroy},
-        {"createBufferQueueAudioPlayer", "(II)V",                                   (void *) createBufferQueueAudioPlayer},
-        {"playHello",                    "(II)V",                                   (void *) playClip},
-        {"createAssetsAudioPlayer",      "(Ljava/lang/Object;Ljava/lang/String;)V", (void *) createAssetsAudioPlayer},
-        {"playAssets",                   "()V",                                     (void *) playAssets},
-        {"playPCM",                      "()V",                                     (void *) playPCM},
-        {"createAudioRecorder",          "()V",                                     (void *) createAudioRecorder},
-        {"startRecord",                  "()V",                                     (void *) startRecord},
-        {"stopRecord",                   "()V",                                     (void *) stopRecord},
-        {"playRecord",                   "()V",                                     (void *) playRecord},
-        {"shutdown",                     "()V",                                     (void *) shutdown},
+        {"init",                         "()V",                   (void *) init},
+        {"destroy",                      "()V",                   (void *) destroy},
+        {"createEngine",                 "()V",                   (void *) createEngine},
+        {"createBufferQueueAudioPlayer", "(II)V",                 (void *) createBufferQueueAudioPlayer},
+        {"playClip",                     "(II)V",                 (void *) playClip},
+        {"playAssets",                   "(Z)V",                  (void *) playAssets},
+        {"createPcmAudioPlayer",         "(Ljava/lang/String;)Z", (void *) createPcmAudioPlayer},
+        {"playPCM",                      "(Z)V",                  (void *) playPCM},
+        {"createAudioRecorder",          "()Z",                   (void *) createAudioRecorder},
+        {"startRecord",                  "()V",                   (void *) startRecord},
+        {"stopRecord",                   "()V",                   (void *) stopRecord},
+        {"playRecord",                   "()V",                   (void *) playRecord},
+        {"shutdown",                     "()V",                   (void *) shutdown},
 };
 
 /**

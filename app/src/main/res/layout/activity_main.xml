@@ -32,7 +32,7 @@
         android:id="@+id/main_assets_btn"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:text="Assets音频"
+        android:text="Assets"
         android:textAllCaps="false"
         app:layout_constraintStart_toEndOf="@id/main_android_btn"
         app:layout_constraintTop_toTopOf="parent"

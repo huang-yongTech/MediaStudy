@@ -13,23 +13,27 @@ public class MediaTest {
 
     public native void destroy();
 
-    private native void createBufferQueueAudioPlayer(int sampleRate, int bufSize);
+    public native void createEngine();
 
-    private native void playClip(int which, int count);
+    public native void createBufferQueueAudioPlayer(int sampleRate, int bufSize);
 
-    private native void createAssetsAudioPlayer(AssetManager assetManager, String fileName);
+    public native void playClip(int which, int count);
 
-    private native void playAssets();
+    public native boolean createAssetsAudioPlayer(AssetManager assetManager, String fileName);
 
-    private native void playPCM();
+    public native void playAssets(boolean isPlaying);
 
-    private native void createAudioRecorder();
+    public native boolean createPcmAudioPlayer(String fileName);
 
-    private native void startRecord();
+    public native void playPCM(boolean isPlaying);
 
-    private native void stopRecord();
+    public native boolean createAudioRecorder();
 
-    private native void playRecord();
+    public native void startRecord();
 
-    private native void shutdown();
+    public native void stopRecord();
+
+    public native void playRecord();
+
+    public native void shutdown();
 }
