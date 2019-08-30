@@ -3,7 +3,7 @@ package com.hy.ndk.mediastudy;
 import android.content.res.AssetManager;
 
 public class MediaTest {
-    MediaTest() {
+    public MediaTest() {
         System.loadLibrary("native-bridge");
         init();
     }

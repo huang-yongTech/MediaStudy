@@ -1,77 +1,108 @@
 <?xml version="1.0" encoding="utf-8"?>
-<android.support.constraint.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".MainActivity">
+    android:orientation="vertical">
 
-    <Button
-        android:id="@+id/main_hello_btn"
-        android:layout_width="0dp"
+    <android.support.design.widget.AppBarLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Hello"
-        android:textAllCaps="false"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintWidth_default="percent"
-        app:layout_constraintWidth_percent="0.25" />
+        android:theme="@style/AppTheme.AppBarOverlay">
 
-    <Button
-        android:id="@+id/main_android_btn"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:text="Android"
-        android:textAllCaps="false"
-        app:layout_constraintStart_toEndOf="@id/main_hello_btn"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintWidth_default="percent"
-        app:layout_constraintWidth_percent="0.25" />
+        <android.support.v7.widget.Toolbar
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="?android:attr/actionBarSize"
+            app:popupTheme="@style/AppTheme.PopupOverlay"
+            app:title="主界面" />
+    </android.support.design.widget.AppBarLayout>
 
-    <Button
-        android:id="@+id/main_assets_btn"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:text="Assets"
-        android:textAllCaps="false"
-        app:layout_constraintStart_toEndOf="@id/main_android_btn"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintWidth_default="percent"
-        app:layout_constraintWidth_percent="0.25" />
+    <android.support.constraint.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        tools:context=".activity.MainActivity">
 
-    <Button
-        android:id="@+id/main_pcm_btn"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:text="PCM音频"
-        android:textAllCaps="false"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toEndOf="@id/main_assets_btn"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintWidth_default="percent"
-        app:layout_constraintWidth_percent="0.25" />
+        <Button
+            android:id="@+id/main_hello_btn"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="Hello"
+            android:textAllCaps="false"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintWidth_default="percent"
+            app:layout_constraintWidth_percent="0.25" />
+
+        <Button
+            android:id="@+id/main_android_btn"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="Android"
+            android:textAllCaps="false"
+            app:layout_constraintStart_toEndOf="@id/main_hello_btn"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintWidth_default="percent"
+            app:layout_constraintWidth_percent="0.25" />
+
+        <Button
+            android:id="@+id/main_assets_btn"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="Assets"
+            android:textAllCaps="false"
+            app:layout_constraintStart_toEndOf="@id/main_android_btn"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintWidth_default="percent"
+            app:layout_constraintWidth_percent="0.25" />
+
+        <Button
+            android:id="@+id/main_pcm_btn"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="PCM音频"
+            android:textAllCaps="false"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toEndOf="@id/main_assets_btn"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintWidth_default="percent"
+            app:layout_constraintWidth_percent="0.25" />
 
 
-    <Button
-        android:id="@+id/main_recorder_btn"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:text="开始录音"
-        android:textAllCaps="false"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/main_hello_btn"
-        app:layout_constraintWidth_default="percent"
-        app:layout_constraintWidth_percent="0.5" />
+        <Button
+            android:id="@+id/main_recorder_btn"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="开始录音"
+            android:textAllCaps="false"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/main_hello_btn"
+            app:layout_constraintWidth_default="percent"
+            app:layout_constraintWidth_percent="0.5" />
 
-    <Button
-        android:id="@+id/main_play_back_btn"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:text="播放录音音频"
-        android:textAllCaps="false"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toEndOf="@id/main_recorder_btn"
-        app:layout_constraintTop_toBottomOf="@id/main_assets_btn"
-        app:layout_constraintWidth_default="percent"
-        app:layout_constraintWidth_percent="0.5" />
-</android.support.constraint.ConstraintLayout>
+        <Button
+            android:id="@+id/main_play_back_btn"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="播放录音音频"
+            android:textAllCaps="false"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toEndOf="@id/main_recorder_btn"
+            app:layout_constraintTop_toBottomOf="@id/main_assets_btn"
+            app:layout_constraintWidth_default="percent"
+            app:layout_constraintWidth_percent="0.5" />
+
+        <Button
+            android:id="@+id/main_record_video_btn"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="录制视频"
+            android:textAllCaps="false"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/main_recorder_btn"
+            app:layout_constraintWidth_default="percent"
+            app:layout_constraintWidth_percent="0.5" />
+    </android.support.constraint.ConstraintLayout>
+</LinearLayout>

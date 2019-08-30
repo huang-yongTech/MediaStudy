@@ -1,13 +1,17 @@
-package com.hy.ndk.mediastudy;
+package com.hy.ndk.mediastudy.activity;
 
 import android.Manifest;
 import android.content.Context;
+import android.content.Intent;
 import android.media.AudioManager;
 import android.os.Bundle;
 import android.os.Environment;
 import android.support.v7.app.AppCompatActivity;
 import android.view.View;
 
+import com.hy.jni.base.Constant;
+import com.hy.ndk.mediastudy.MediaTest;
+import com.hy.ndk.mediastudy.R;
 import com.tbruyelle.rxpermissions2.Permission;
 import com.tbruyelle.rxpermissions2.RxPermissions;
 
@@ -87,7 +91,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @OnClick({R.id.main_hello_btn, R.id.main_android_btn, R.id.main_assets_btn,
-            R.id.main_pcm_btn, R.id.main_recorder_btn, R.id.main_play_back_btn})
+            R.id.main_pcm_btn, R.id.main_recorder_btn, R.id.main_play_back_btn,
+            R.id.main_record_video_btn})
     public void onViewClicked(View view) {
         switch (view.getId()) {
             case R.id.main_hello_btn:
@@ -124,6 +129,13 @@ public class MainActivity extends AppCompatActivity {
                 break;
             case R.id.main_play_back_btn:
                 mMediaTest.playClip(3, 1);
+                break;
+            case R.id.main_record_video_btn:
+                Bundle recordVideoBundle = new Bundle();
+                recordVideoBundle.putString(Constant.TYPE, Constant.TYPE_RECORD_VIDEO);
+                Intent recordVideoIntent = new Intent(this, CommonHostActivity.class);
+                recordVideoIntent.putExtras(recordVideoBundle);
+                startActivity(recordVideoIntent);
                 break;
         }
     }
