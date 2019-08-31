@@ -21,27 +21,35 @@
 
 // pre-recorded sound clips, both are 8 kHz mono 16-bit signed little endian
 static const char hello[] =
-#include "hello_clip.h"
-;
+
+#include "hello_clip.h";
 
 static const char android[] =
-#include "android_clip.h"
-;
+
+#include "android_clip.h";
 
 //engine interfaces
-static SLObjectItf engineObject = nullptr;
+        SLObjectItf
+engineObject = nullptr;
+//创建其他opensl-es对象类型的接口对象，该对象紧随SLObjectItf创建之后创建
 SLEngineItf engineEngine = nullptr;
 
 //混音器
 SLObjectItf outputMixObject = nullptr;
+//一些环境混响属性的设置
 SLEnvironmentalReverbItf outputMixEnvironmentalReverb = nullptr;
 SLEnvironmentalReverbSettings reverbSettings = SL_I3DL2_ENVIRONMENT_PRESET_STONECORRIDOR;
 
 //文件接口功能
+//其他对象创建需要依赖的基础对象，该对象必须最先创建
 SLObjectItf fdPlayerObject = nullptr;
+//播放器，播放状态控制对象
 SLPlayItf fdPlayerPlay;
+//音频回放接口，通过该接口可实现音频循环播放
 SLSeekItf fdPlayerSeek;
+//音频播放通道选择
 SLMuteSoloItf fdPlayerMuteSolo;
+//音频声音属性的控制
 SLVolumeItf fdPlayerVolume;
 
 //pcm文件播放器
@@ -49,6 +57,7 @@ SLObjectItf pcmPlayerObject = nullptr;
 SLPlayItf pcmPlayerPlay = nullptr;
 SLSeekItf pcmPlayerSeek;
 SLVolumeItf pcmPlayerVolume = nullptr;
+//缓冲区队列
 SLAndroidSimpleBufferQueueItf pcmBufferQueue;
 //pcm缓冲相关
 FILE *pcmFile;
@@ -58,6 +67,7 @@ uint8_t *out_buffer;
 
 //录音接口功能
 SLObjectItf recorderObject = nullptr;
+//音频录制状态接口
 SLRecordItf recorderRecord = nullptr;
 SLAndroidSimpleBufferQueueItf recorderBufferQueue = nullptr;
 
@@ -131,7 +141,7 @@ void bqPlayerCallback_(SLAndroidSimpleBufferQueueItf bq, void *context) {
 void createEngine_() {
     SLresult result;
 
-    //创建engine
+    //创建SLObjectItf
     result = slCreateEngine(&engineObject, 0, nullptr, 0, nullptr, nullptr);
     assert(SL_RESULT_SUCCESS == result);
     (void) result;
@@ -141,7 +151,7 @@ void createEngine_() {
     assert(SL_RESULT_SUCCESS == result);
     (void) result;
 
-    // get the engine interface, which is needed in order to create other objects
+    //创建SLEngineItf接口，该接口主要用于创建其它对象
     result = (*engineObject)->GetInterface(engineObject, SL_IID_ENGINE, &engineEngine);
     assert(SL_RESULT_SUCCESS == result);
     (void) result;
@@ -158,6 +168,7 @@ void createEngine_() {
     assert(SL_RESULT_SUCCESS == result);
     (void) result;
 
+    //创建SLEnvironmentalReverbItf接口实现对象
     result = (*outputMixObject)->GetInterface(outputMixObject, SL_IID_ENVIRONMENTALREVERB,
                                               &outputMixEnvironmentalReverb);
     if (SL_RESULT_SUCCESS == result) {
@@ -189,11 +200,11 @@ short *createResampledBuf_(uint32_t idx, uint32_t srcRate, unsigned *size) {
         case 0:
             return nullptr;
         case 1: // HELLO_CLIP
-            srcSampleCount = sizeof(hello) / 2;
+            srcSampleCount = sizeof(hello) >> 1;
             src = (short *) hello;
             break;
         case 2: // ANDROID_CLIP
-            srcSampleCount = sizeof(android) / 2;
+            srcSampleCount = sizeof(android) >> 1;
             src = (short *) android;
             break;
         case 3: // captured frames
@@ -363,6 +374,11 @@ void createBufferQueueAudioPlayer_(jint sampleRate, jint bufSize) {
     (void) result;
 }
 
+/**
+ * 事先录制的音频播放
+ * @param which
+ * @param count
+ */
 void playClip_(jint which, int count) {
     if (pthread_mutex_trylock(&audioEngineLock)) {
         // If we could not acquire audio engine lock, reject this request and client should re-try
@@ -421,6 +437,14 @@ void playClip_(jint which, int count) {
     }
 }
 
+/**
+ * assests音频播放
+ * @param env
+ * @param instance
+ * @param assetManager
+ * @param fileName
+ * @return
+ */
 jboolean createAssetsAudioPlayer_(JNIEnv *env, jobject instance, jobject assetManager,
                                   jstring fileName) {
     SLresult result;
@@ -543,6 +567,13 @@ void pcmBufferCallBack(SLAndroidSimpleBufferQueueItf bq, void *context) {
     }
 }
 
+/**
+ * pcm文件音频播放
+ * @param env
+ * @param instance
+ * @param fileName
+ * @return
+ */
 jboolean createPcmAudioPlayer_(JNIEnv *env, jobject instance, jstring fileName) {
     const char *pcmPath = env->GetStringUTFChars(fileName, nullptr);
     pcmFile = fopen(pcmPath, "re");
@@ -642,6 +673,9 @@ void bqRecorderCallback(SLAndroidSimpleBufferQueueItf bq, void *context) {
     pthread_mutex_unlock(&audioEngineLock);
 }
 
+/**
+ * 录音功能
+ */
 jboolean createAudioRecorder_() {
     SLresult result;
 
@@ -693,6 +727,9 @@ jboolean createAudioRecorder_() {
     return JNI_TRUE;
 }
 
+/**
+ * 开始录音（录音的音频如何保存？）
+ */
 void startRecord_() {
     SLresult result;
 
