@@ -33,7 +33,7 @@ public class MediaTest {
 
     public native void stopRecord();
 
-    public native void playRecord();
+    public native void playRecord(boolean isPlaying);
 
     public native void shutdown();
 }

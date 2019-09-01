@@ -79,8 +79,8 @@ void stopRecord(JNIEnv *env, jobject instance) {
     stopRecord_();
 }
 
-void playRecord(JNIEnv *env, jobject instance) {
-    playRecord_();
+void playRecord(JNIEnv *env, jobject instance, jboolean isPlaying) {
+    playRecord_(isPlaying);
 }
 
 void shutdown(JNIEnv *env, jobject instance) {
@@ -100,7 +100,7 @@ static const JNINativeMethod method[] = {
         {"createAudioRecorder",          "()Z",                   (void *) createAudioRecorder},
         {"startRecord",                  "()V",                   (void *) startRecord},
         {"stopRecord",                   "()V",                   (void *) stopRecord},
-        {"playRecord",                   "()V",                   (void *) playRecord},
+        {"playRecord",                   "(Z)V",                  (void *) playRecord},
         {"shutdown",                     "()V",                   (void *) shutdown},
 };
 
