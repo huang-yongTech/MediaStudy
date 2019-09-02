@@ -18,7 +18,7 @@ android {
                 cppFlags "-frtti -fexceptions -std=c++11"
                 arguments "-DANDROID_STL=c++_shared"
                 //指定arm编译环境
-                abiFilters "armeabi-v7a"
+//                abiFilters "armeabi-v7a"
             }
         }
     }

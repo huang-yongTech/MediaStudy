@@ -15,31 +15,33 @@
 
 #include <android/asset_manager.h>
 #include <android/asset_manager_jni.h>
+
 #include "AudioContext.h"
+#include "TimeHelper.h"
 
+#define SAMPLE_RATE 44100
+#define PERIOD_TIME 20  // 20ms
 #define RECORDER_FRAMES (16000 * 5)
-
-// pre-recorded sound clips, both are 8 kHz mono 16-bit signed little endian
-static const char hello[] =
-
-#include "hello_clip.h";
-
-static const char android[] =
-
-#include "android_clip.h";
+#define FRAME_SIZE SAMPLE_RATE * PERIOD_TIME / 1000
+#define CHANNELS 2
+#define BUFFER_SIZE (FRAME_SIZE * CHANNELS)
 
 //engine interfaces
 static SLObjectItf engineObject = nullptr;
 //创建其他opensl-es对象类型的接口对象，该对象紧随SLObjectItf创建之后创建
 SLEngineItf engineEngine = nullptr;
 
-//混音器
+/**
+ * 混音器
+ */
 SLObjectItf outputMixObject = nullptr;
 //一些环境混响属性的设置
 SLEnvironmentalReverbItf outputMixEnvironmentalReverb = nullptr;
 SLEnvironmentalReverbSettings reverbSettings = SL_I3DL2_ENVIRONMENT_PRESET_STONECORRIDOR;
 
-//文件接口功能
+/**
+ * assets文件播放
+ */
 //其他对象创建需要依赖的基础对象，该对象必须最先创建
 SLObjectItf fdPlayerObject = nullptr;
 //播放器，播放状态控制对象
@@ -51,7 +53,9 @@ SLMuteSoloItf fdPlayerMuteSolo;
 //音频声音属性的控制
 SLVolumeItf fdPlayerVolume;
 
-//pcm文件播放器
+/**
+ * pcm文件播放
+ */
 SLObjectItf pcmPlayerObject = nullptr;
 SLPlayItf pcmPlayerPlay = nullptr;
 SLSeekItf pcmPlayerSeek;
@@ -64,77 +68,38 @@ void *buffer;
 uint8_t *out_buffer;
 //pcm缓冲器队列接口
 
-//录音接口功能
+/**
+ * 录音
+ */
 SLObjectItf recorderObject = nullptr;
 SLPlayItf recorderPlay;
 //音频录制状态接口
 SLRecordItf recorderRecord = nullptr;
 SLAndroidSimpleBufferQueueItf recorderBufferQueue = nullptr;
 
-//缓冲队列
-SLObjectItf bqPlayerObject = nullptr;
-SLPlayItf bqPlayerPlay;
-SLAndroidSimpleBufferQueueItf bqPlayerBufferQueue;
-SLEffectSendItf bqPlayerEffectSend;
-SLMuteSoloItf bqPlayerMuteSolo;
-SLVolumeItf bqPlayerVolume;
-SLmilliHertz bqPlayerSampleRate = 0;
-jint bqPlayerBufSize = 0;
-short *resampleBuf = nullptr;
+/**
+ * 录音音频播放
+ */
+SLObjectItf audioPlayerObject;
+SLPlayItf audioPlayerPlay;
+SLAndroidSimpleBufferQueueItf audioBufferQueue;
+
 // a mutext to guard against re-entrance to record & playback
 // as well as make recording and playing back to be mutually exclusive
 // this is to avoid crash at situations like:
 // recording is in session [not finished]
 // user presses record button and another recording coming in
 // The action: when recording/playing back is not finished, ignore the new request
+/**
+ * 线程安全控制
+ */
 pthread_mutex_t audioEngineLock = PTHREAD_MUTEX_INITIALIZER;
 
-// pointer and size of the next player buffer to enqueue, and number of remaining buffers
-short *nextBuffer;
-unsigned nextSize;
-//重复次数
-int nextCount;
 
-// 5 seconds of recorded audio at 16 kHz mono, 16-bit signed little endian
-//录制5秒音频
-short recorderBuffer[RECORDER_FRAMES];
-unsigned recorderSize = 0;
-
-//释放缓冲池
-void releaseResampleBuf_() {
-    if (0 == bqPlayerSampleRate) {
-        /*
-         * we are not using fast path, so we were not creating buffers, nothing to do
-         */
-        return;
-    }
-
-    free(resampleBuf);
-    resampleBuf = nullptr;
-}
-
-void bqPlayerCallback_(SLAndroidSimpleBufferQueueItf bq, void *context) {
-    assert(bq == bqPlayerBufferQueue);
-    assert(nullptr == context);
-    //for streaming playback, replace this test by logic to find and fill the next buffer
-    if (--nextCount > 0 && nullptr != nextBuffer &&
-        0 != nextSize) {
-        SLresult result;
-        //enqueue another buffer
-        result = (*bqPlayerBufferQueue)->Enqueue(bqPlayerBufferQueue,
-                                                 nextBuffer,
-                                                 nextSize);
-        //the most likely other result is SL_RESULT_BUFFER_INSUFFICIENT,
-        //which for this code example would indicate a programming error
-        if (SL_RESULT_SUCCESS != result) {
-            pthread_mutex_unlock(&audioEngineLock);
-        }
-        (void) result;
-    } else {
-        releaseResampleBuf_();
-        pthread_mutex_unlock(&audioEngineLock);
-    }
-}
+/**
+ * 音频录制数据临时缓存对象
+ */
+static AudioContext *audioContext;
 
 void createEngine_() {
     SLresult result;
@@ -176,67 +141,7 @@ void createEngine_() {
     }
 }
 
-//创建采样缓冲池
-short *createResampledBuf_(uint32_t idx, uint32_t srcRate, unsigned *size) {
-    short *src = nullptr;
-    short *workBuf;
-    int upSampleRate;
-    int32_t srcSampleCount = 0;
-
-    if (0 == bqPlayerSampleRate) {
-        return nullptr;
-    }
-    if (bqPlayerSampleRate % srcRate) {
-        /*
-         * simple up-sampling, must be divisible
-         */
-        return nullptr;
-    }
-    upSampleRate = bqPlayerSampleRate / srcRate;
-
-    switch (idx) {
-        case 0:
-            return nullptr;
-        case 1: // HELLO_CLIP
-            srcSampleCount = sizeof(hello) >> 1;
-            src = (short *) hello;
-            break;
-        case 2: // ANDROID_CLIP
-            srcSampleCount = sizeof(android) >> 1;
-            src = (short *) android;
-            break;
-        default:
-            assert(0);
-            return nullptr;
-    }
-
-    resampleBuf = (short *) malloc((srcSampleCount * upSampleRate) << 1);
-    if (resampleBuf == nullptr) {
-        return resampleBuf;
-    }
-    workBuf = resampleBuf;
-    for (int sample = 0; sample < srcSampleCount; sample++) {
-        for (int dup = 0; dup < upSampleRate; dup++) {
-            *workBuf++ = src[sample];
-        }
-    }
-
-    *size = (srcSampleCount * upSampleRate) << 1;     // sample format is 16 bit
-    return resampleBuf;
-}
-
 void destroy_() {
-    // destroy buffer queue audio player object, and invalidate all associated interfaces
-    if (bqPlayerObject != nullptr) {
-        (*bqPlayerObject)->Destroy(bqPlayerObject);
-        bqPlayerObject = nullptr;
-        bqPlayerPlay = nullptr;
-        bqPlayerBufferQueue = nullptr;
-        bqPlayerEffectSend = nullptr;
-        bqPlayerMuteSolo = nullptr;
-        bqPlayerVolume = nullptr;
-    }
-
     // destroy file descriptor audio player object, and invalidate all associated interfaces
     if (fdPlayerObject != nullptr) {
         (*fdPlayerObject)->Destroy(fdPlayerObject);
@@ -278,148 +183,18 @@ void destroy_() {
         engineEngine = nullptr;
     }
 
+    if (audioPlayerObject != nullptr) {
+        (*audioPlayerObject)->Destroy(audioPlayerObject);
+        audioPlayerObject = nullptr;
+        audioPlayerPlay = nullptr;
+        audioBufferQueue = nullptr;
+    }
+
+    if (audioContext != nullptr) {
+        delete audioContext;
+    }
+
     pthread_mutex_destroy(&audioEngineLock);
-}
-
-void createBufferQueueAudioPlayer_(jint sampleRate, jint bufSize) {
-    SLresult result;
-
-    if (sampleRate >= 0 && bufSize >= 0) {
-        bqPlayerSampleRate = sampleRate * 1000;
-        /*
-         * device native buffer size is another factor to minimize audio latency, not used in this
-         * sample: we only play one giant buffer here
-         */
-        bqPlayerBufSize = bufSize;
-    }
-
-    //配置输入源
-    SLDataLocator_AndroidSimpleBufferQueue loc_bufQueue = {SL_DATALOCATOR_ANDROIDSIMPLEBUFFERQUEUE,
-                                                           2};
-    SLDataFormat_PCM format_pcm = {SL_DATAFORMAT_PCM,
-                                   1,
-                                   SL_SAMPLINGRATE_8,
-                                   SL_PCMSAMPLEFORMAT_FIXED_16,
-                                   SL_PCMSAMPLEFORMAT_FIXED_16,
-                                   SL_SPEAKER_FRONT_CENTER,
-                                   SL_BYTEORDER_LITTLEENDIAN};
-    /**
-     * Enable Fast Audio when possible:  once we set the same rate to be the native, fast audio path
-     * will be triggered
-     */
-    if (bqPlayerSampleRate) {
-        format_pcm.samplesPerSec = bqPlayerSampleRate;       //sample rate in mili second
-    }
-    SLDataSource audioSrc = {&loc_bufQueue, &format_pcm};
-
-    //配置输出源
-    SLDataLocator_OutputMix loc_outmix = {SL_DATALOCATOR_OUTPUTMIX, outputMixObject};
-    SLDataSink audioSnk = {&loc_outmix, nullptr};
-
-    /**
-     * 创建AudioPlayer
-     * fast audio does not support when SL_IID_EFFECTSEND is required, skip it
-     * for fast audio case
-     */
-    const SLInterfaceID ids[3] = {SL_IID_BUFFERQUEUE, SL_IID_VOLUME, SL_IID_EFFECTSEND,
-            /*SL_IID_MUTESOLO,*/};
-    const SLboolean req[3] = {SL_BOOLEAN_TRUE, SL_BOOLEAN_TRUE, SL_BOOLEAN_TRUE,
-            /*SL_BOOLEAN_TRUE,*/};
-    result = (*engineEngine)->CreateAudioPlayer(engineEngine, &bqPlayerObject, &audioSrc, &audioSnk,
-                                                bqPlayerSampleRate ? 2 : 3, ids, req);
-    assert(SL_RESULT_SUCCESS == result);
-    (void) result;
-
-    // realize the player
-    result = (*bqPlayerObject)->Realize(bqPlayerObject, SL_BOOLEAN_FALSE);
-    assert(SL_RESULT_SUCCESS == result);
-    (void) result;
-
-    // get the play interface
-    result = (*bqPlayerObject)->GetInterface(bqPlayerObject, SL_IID_PLAY, &bqPlayerPlay);
-    assert(SL_RESULT_SUCCESS == result);
-    (void) result;
-
-    // get the buffer queue interface
-    result = (*bqPlayerObject)->GetInterface(bqPlayerObject, SL_IID_BUFFERQUEUE,
-                                             &bqPlayerBufferQueue);
-    assert(SL_RESULT_SUCCESS == result);
-    (void) result;
-
-    // register callback on the buffer queue
-    result = (*bqPlayerBufferQueue)->RegisterCallback(bqPlayerBufferQueue, bqPlayerCallback_,
-                                                      nullptr);
-    assert(SL_RESULT_SUCCESS == result);
-    (void) result;
-
-    // get the effect send interface
-    bqPlayerEffectSend = nullptr;
-    if (0 == bqPlayerSampleRate) {
-        result = (*bqPlayerObject)->GetInterface(bqPlayerObject, SL_IID_EFFECTSEND,
-                                                 &bqPlayerEffectSend);
-        assert(SL_RESULT_SUCCESS == result);
-        (void) result;
-    }
-
-    // get the volume interface
-    result = (*bqPlayerObject)->GetInterface(bqPlayerObject, SL_IID_VOLUME, &bqPlayerVolume);
-    assert(SL_RESULT_SUCCESS == result);
-    (void) result;
-
-    // set the player's state to playing
-    result = (*bqPlayerPlay)->SetPlayState(bqPlayerPlay, SL_PLAYSTATE_PLAYING);
-    assert(SL_RESULT_SUCCESS == result);
-    (void) result;
-}
-
-/**
- * 事先录制的音频播放
- * @param which
- * @param count
- */
-void playClip_(jint which, int count) {
-    if (pthread_mutex_trylock(&audioEngineLock)) {
-        // If we could not acquire audio engine lock, reject this request and client should re-try
-        return;
-    }
-
-    switch (which) {
-        case 0:// CLIP_NONE
-            nextBuffer = nullptr;
-            nextSize = 0;
-            break;
-        case 1:// CLIP_HELLO
-            nextBuffer = createResampledBuf_(1, SL_SAMPLINGRATE_8, &nextSize);
-            if (nextBuffer != nullptr) {
-                nextBuffer = (short *) hello;
-                nextSize = sizeof(hello);
-            }
-            break;
-        case 2:// CLIP_ANDROID
-            nextBuffer = createResampledBuf_(2, SL_SAMPLINGRATE_8, &nextSize);
-            if (nextBuffer != nullptr) {
-                nextBuffer = (short *) android;
-                nextSize = sizeof(android);
-            }
-            break;
-        default:
-            nextBuffer = nullptr;
-            nextSize = 0;
-            break;
-    }
-
-    nextCount = count;
-    if (nextSize > 0) {
-        // here we only enqueue one buffer because it is a long clip,
-        // but for streaming playback we would typically enqueue at least 2 buffers to start
-        SLresult result;
-        result = (*bqPlayerBufferQueue)->Enqueue(bqPlayerBufferQueue, nextBuffer, nextSize);
-        if (SL_RESULT_SUCCESS != result) {
-            pthread_mutex_unlock(&audioEngineLock);
-        }
-    } else {
-        pthread_mutex_unlock(&audioEngineLock);
-    }
 }
 
 /**
@@ -432,11 +207,11 @@ void playClip_(jint which, int count) {
  */
 jboolean createAssetsAudioPlayer_(JNIEnv *env, jobject instance,
                                   jobject assetManager,
-                                  jstring fileName) {
+                                  jstring filePath) {
     SLresult result;
 
     // convert Java string to UTF-8
-    const char *utf8 = env->GetStringUTFChars(fileName, nullptr);
+    const char *utf8 = env->GetStringUTFChars(filePath, nullptr);
     assert(nullptr != utf8);
 
     // use asset manager to open asset by filename
@@ -445,7 +220,7 @@ jboolean createAssetsAudioPlayer_(JNIEnv *env, jobject instance,
     AAsset *asset = AAssetManager_open(mgr, utf8, AASSET_MODE_UNKNOWN);
 
     // release the Java string and UTF-8
-    env->ReleaseStringUTFChars(fileName, utf8);
+    env->ReleaseStringUTFChars(filePath, utf8);
 
     // the asset might not be found
     if (nullptr == asset) {
@@ -560,16 +335,16 @@ void pcmBufferCallBack(SLAndroidSimpleBufferQueueItf bq, void *context) {
  * @param fileName
  * @return
  */
-jboolean createPcmAudioPlayer_(JNIEnv *env, jobject instance, jstring fileName) {
-    const char *pcmPath = env->GetStringUTFChars(fileName, nullptr);
+jboolean createPcmAudioPlayer_(JNIEnv *env, jobject instance, jstring filePath) {
+    const char *pcmPath = env->GetStringUTFChars(filePath, nullptr);
     pcmFile = fopen(pcmPath, "re");
     if (pcmFile == nullptr) {
-        LOGE("%s", "fopen file error");
+        LOGE("open file %s error", pcmPath);
         return JNI_FALSE;
     }
 
     out_buffer = (uint8_t *) malloc(44100 * 2 * 2);
-    env->ReleaseStringUTFChars(fileName, pcmPath);
+    env->ReleaseStringUTFChars(filePath, pcmPath);
 
     SLresult result;
 
@@ -645,8 +420,6 @@ void playPCM_(jboolean isPlaying) {
     }
 }
 
-static AudioContext *audioContext;
-
 /**
  * this callback handler is called every time a buffer finishes recording
  * 录制音频回调函数
@@ -656,13 +429,30 @@ void audioRecorderCallback(SLAndroidSimpleBufferQueueItf bq, void *context) {
 
     audioContext = (AudioContext *) context;
     assert(nullptr != audioContext);
+
     // for streaming recording, here we would call Enqueue to give recorder the next buffer to fill
     // but instead, this is a one-time buffer so we stop recording
-    SLresult result;
-    result = (*recorderRecord)->SetRecordState(recorderRecord, SL_RECORDSTATE_STOPPED);
-    if (SL_RESULT_SUCCESS == result) {
-        recorderSize = RECORDER_FRAMES * sizeof(short);
+    //谷歌的官方例子是只录制一个指定时间（大概5秒左右）的音频，这里修改了下，录制时间由我们自己手动控制
+    if (nullptr != audioContext->buffer) {
+        fwrite(audioContext->buffer, audioContext->bufferSize, 1, audioContext->pFile);
+
+        SLresult result;
+        //音频录制状态
+        SLuint32 state;
+
+        result = (*recorderRecord)->GetRecordState(recorderRecord, &state);
+        assert(SL_RESULT_SUCCESS == result);
+        (void) result;
+
+        if (state == SL_RECORDSTATE_RECORDING) {
+            result = (*recorderBufferQueue)->Enqueue(recorderBufferQueue, audioContext->buffer,
+                                                     audioContext->bufferSize);
+            assert(SL_RESULT_SUCCESS == result);
+            (void) result;
+        }
     }
+
+    pthread_mutex_unlock(&audioEngineLock);
 }
 
 /**
@@ -682,6 +472,8 @@ void audioPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *context) {
     } else {
         delete audioContext;
     }
+
+    pthread_mutex_unlock(&audioEngineLock);
 }
 
 /**
@@ -691,27 +483,34 @@ jboolean createAudioRecorder_() {
     SLresult result;
 
     //输入源
-    SLDataLocator_IODevice loc_dev = {SL_DATALOCATOR_IODEVICE, SL_IODEVICE_AUDIOINPUT,
-                                      SL_DEFAULTDEVICEID_AUDIOINPUT, nullptr};
+    SLDataLocator_IODevice loc_dev = {SL_DATALOCATOR_IODEVICE,
+                                      SL_IODEVICE_AUDIOINPUT,
+                                      SL_DEFAULTDEVICEID_AUDIOINPUT,
+                                      nullptr};
     SLDataSource audioSrc = {&loc_dev, nullptr};
 
     //输出源
-    SLDataLocator_AndroidSimpleBufferQueue loc_bq = {SL_DATALOCATOR_ANDROIDSIMPLEBUFFERQUEUE, 2};
+    SLDataLocator_AndroidSimpleBufferQueue loc_bq = {SL_DATALOCATOR_ANDROIDSIMPLEBUFFERQUEUE,
+                                                     1};
     SLDataFormat_PCM format_pcm = {SL_DATAFORMAT_PCM,
-                                   1,
+                                   2,
                                    SL_SAMPLINGRATE_16,
                                    SL_PCMSAMPLEFORMAT_FIXED_16,
                                    SL_PCMSAMPLEFORMAT_FIXED_16,
-                                   SL_SPEAKER_FRONT_CENTER,
+                                   SL_SPEAKER_FRONT_LEFT | SL_SPEAKER_FRONT_RIGHT,
                                    SL_BYTEORDER_LITTLEENDIAN};
     SLDataSink audioSnk = {&loc_bq, &format_pcm};
 
     // create audio recorder
     // (requires the RECORD_AUDIO permission)
-    const SLInterfaceID id[1] = {SL_IID_ANDROIDSIMPLEBUFFERQUEUE};
-    const SLboolean req[1] = {SL_BOOLEAN_TRUE};
-    result = (*engineEngine)->CreateAudioRecorder(engineEngine, &recorderObject, &audioSrc,
-                                                  &audioSnk, 1, id, req);
+    const SLInterfaceID id[2] = {SL_IID_ANDROIDSIMPLEBUFFERQUEUE,
+                                 SL_IID_RECORD};
+    const SLboolean req[2] = {SL_BOOLEAN_TRUE, SL_BOOLEAN_TRUE};
+    result = (*engineEngine)->CreateAudioRecorder(engineEngine,
+                                                  &recorderObject,
+                                                  &audioSrc,
+                                                  &audioSnk,
+                                                  2, id, req);
     if (SL_RESULT_SUCCESS != result) {
         return JNI_FALSE;
     }
@@ -722,25 +521,14 @@ jboolean createAudioRecorder_() {
         return JNI_FALSE;
     }
 
-    //获取录制音频播放接口对象
-    result = (*recorderObject)->GetInterface(recorderObject, SL_IID_PLAY, &recorderPlay);
-    assert(SL_RESULT_SUCCESS == result);
-    (void) result;
-
-    // get the record interface
+    //获取音频录制接口对象
     result = (*recorderObject)->GetInterface(recorderObject, SL_IID_RECORD, &recorderRecord);
     assert(SL_RESULT_SUCCESS == result);
     (void) result;
 
-    // get the buffer queue interface
+    //获取缓冲队列接口对象
     result = (*recorderObject)->GetInterface(recorderObject, SL_IID_ANDROIDSIMPLEBUFFERQUEUE,
                                              &recorderBufferQueue);
-    assert(SL_RESULT_SUCCESS == result);
-    (void) result;
-
-    // register callback on the buffer queue
-    result = (*recorderBufferQueue)->RegisterCallback(recorderBufferQueue, audioRecorderCallback,
-                                                      nullptr);
     assert(SL_RESULT_SUCCESS == result);
     (void) result;
 
@@ -748,31 +536,106 @@ jboolean createAudioRecorder_() {
 }
 
 /**
- * 开始录音（录音的音频如何保存？）
+ * 创建录音音频播放器
+ * @return
  */
-void startRecord_() {
+jboolean createAudioPlayer_(JNIEnv *env, jobject instance, jstring filePath) {
+    const char *pcmPath = env->GetStringUTFChars(filePath, nullptr);
+    FILE *pFile = fopen(pcmPath, "re");
+    if (pFile == nullptr) {
+        LOGE("open file %s error", pcmPath);
+        return JNI_FALSE;
+    }
+    env->ReleaseStringUTFChars(filePath, pcmPath);
+
+    SLresult result;
+
+    //输入源
+    SLDataLocator_AndroidSimpleBufferQueue android_queue = {SL_DATALOCATOR_ANDROIDSIMPLEBUFFERQUEUE,
+                                                            2};
+    SLDataFormat_PCM format_pcm = {
+            SL_DATAFORMAT_PCM,//播放pcm格式的数据
+            2,//2个声道（立体声）
+            SL_SAMPLINGRATE_44_1,//44100hz的频率
+            SL_PCMSAMPLEFORMAT_FIXED_16,//位数 16位
+            SL_PCMSAMPLEFORMAT_FIXED_16,//和位数一致就行
+            SL_SPEAKER_FRONT_LEFT | SL_SPEAKER_FRONT_RIGHT,//立体声（前左前右）
+            SL_BYTEORDER_LITTLEENDIAN//结束标志
+    };
+    SLDataSource audioSrc = {&android_queue, &format_pcm};
+
+    //输出源
+    SLDataLocator_OutputMix loc_outmix = {SL_DATALOCATOR_OUTPUTMIX, outputMixObject};
+    SLDataSink audioSnk = {&loc_outmix, nullptr};
+
+    // create audio player
+    const SLInterfaceID ids[3] = {SL_IID_BUFFERQUEUE, SL_IID_PLAY};
+    const SLboolean req[3] = {SL_BOOLEAN_TRUE, SL_BOOLEAN_TRUE, SL_BOOLEAN_TRUE};
+
+    result = (*engineEngine)->CreateAudioPlayer(engineEngine, &audioPlayerObject, &audioSrc,
+                                                &audioSnk,
+                                                3, ids, req);
+    assert(SL_RESULT_SUCCESS == result);
+    (void) result;
+
+    result = (*audioPlayerObject)->Realize(audioPlayerObject, SL_BOOLEAN_FALSE);
+    assert(SL_RESULT_SUCCESS == result);
+    (void) result;
+
+    result = (*audioPlayerObject)->GetInterface(audioPlayerObject, SL_IID_PLAY, &audioPlayerPlay);
+    assert(SL_RESULT_SUCCESS == result);
+    (void) result;
+
+    result = (*audioPlayerObject)->GetInterface(audioPlayerObject, SL_IID_ANDROIDSIMPLEBUFFERQUEUE,
+                                                &audioBufferQueue);
+    assert(SL_RESULT_SUCCESS == result);
+    (void) result;
+
+    uint8_t *buffer = new uint8_t[BUFFER_SIZE];
+    audioContext = new AudioContext(pFile, buffer, BUFFER_SIZE);
+    //注册播放音频回调函数
+    result = (*audioBufferQueue)->RegisterCallback(audioBufferQueue, audioPlayerCallback,
+                                                   audioContext);
+    assert(SL_RESULT_SUCCESS == result);
+    (void) result;
+
+    return JNI_TRUE;
+}
+
+/**
+ * 开始录音
+ */
+void startRecord_(JNIEnv *env, jobject instance, jstring filePath) {
     SLresult result;
 
     if (pthread_mutex_trylock(&audioEngineLock)) {
         return;
     }
 
-    //如果已经开始录制了，则停止录制并清空缓冲队列
-    result = (*recorderRecord)->SetRecordState(recorderRecord, SL_RECORDSTATE_STOPPED);
+    //根据传入的参数构造文件路径
+    const char *pcmPath = env->GetStringUTFChars(filePath, nullptr);
+    FILE *pFile = fopen(pcmPath, "w+");
+    if (nullptr == pFile) {
+        LOGI("%s, Open File Error", pcmPath);
+        return;
+    }
+    env->ReleaseStringUTFChars(filePath, pcmPath);
+
+    uint8_t *buffer = new uint8_t[BUFFER_SIZE];
+    audioContext = new AudioContext(pFile, buffer, BUFFER_SIZE);
+
+    //注册录制音频回调函数
+    result = (*recorderBufferQueue)->RegisterCallback(recorderBufferQueue, audioRecorderCallback,
+                                                      audioContext);
     assert(SL_RESULT_SUCCESS == result);
     (void) result;
 
-    result = (*recorderBufferQueue)->Clear(recorderBufferQueue);
-    assert(SL_RESULT_SUCCESS == result);
-    (void) result;
-
-    // the buffer is not valid for playback yet
-    recorderSize = 0;
+    audioRecorderCallback(recorderBufferQueue, audioContext);
 
     // enqueue an empty buffer to be filled by the recorder
     // (for streaming recording, we would enqueue at least 2 empty buffers to start things off)
-    result = (*recorderBufferQueue)->Enqueue(recorderBufferQueue, recorderBuffer,
-                                             RECORDER_FRAMES * sizeof(short));
+    result = (*recorderBufferQueue)->Enqueue(recorderBufferQueue, audioContext->buffer,
+                                             audioContext->bufferSize);
     // the most likely other result is SL_RESULT_BUFFER_INSUFFICIENT,
     // which for this code example would indicate a programming error
     assert(SL_RESULT_SUCCESS == result);
@@ -805,9 +668,9 @@ void stopRecord_() {
 void playRecord_(jboolean isPlaying) {
     SLresult result;
 
-    if (nullptr != recorderPlay) {
-        result = (*recorderPlay)->SetPlayState(recorderPlay, isPlaying ? SL_PLAYSTATE_PLAYING
-                                                                       : SL_PLAYSTATE_STOPPED);
+    if (nullptr != audioPlayerPlay) {
+        result = (*audioPlayerPlay)->SetPlayState(audioPlayerPlay, isPlaying ? SL_PLAYSTATE_PLAYING
+                                                                             : SL_PLAYSTATE_STOPPED);
         assert(SL_RESULT_SUCCESS == result);
         (void) result;
     }

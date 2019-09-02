@@ -1,26 +1,38 @@
 package com.hy.ndk.mediastudy.activity;
 
 import android.Manifest;
-import android.content.Context;
 import android.content.Intent;
-import android.media.AudioManager;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Handler;
 import android.support.v7.app.AppCompatActivity;
 import android.view.View;
+import android.widget.Button;
+import android.widget.TextView;
 
 import com.hy.jni.base.Constant;
+import com.hy.jni.base.TimeUtils;
 import com.hy.ndk.mediastudy.MediaTest;
 import com.hy.ndk.mediastudy.R;
 import com.tbruyelle.rxpermissions2.Permission;
 import com.tbruyelle.rxpermissions2.RxPermissions;
 
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+
+import butterknife.BindView;
 import butterknife.ButterKnife;
 import butterknife.OnClick;
 import io.reactivex.disposables.Disposable;
 import io.reactivex.functions.Consumer;
 
 public class MainActivity extends AppCompatActivity {
+
+    @BindView(R.id.main_recorder_tv)
+    TextView mRecordTimeTv;
+    @BindView(R.id.main_recorder_btn)
+    Button mRecorderBtn;
 
     private MediaTest mMediaTest;
     private Disposable mDisposable;
@@ -32,6 +44,14 @@ public class MainActivity extends AppCompatActivity {
     private boolean mPcmPlayerCreate;
 
     private boolean mRecorderCreate;
+    private boolean mIsPlayingRecord;
+    private boolean mIsRecording;
+    private boolean mIsAudioPlayerCreate;
+
+    private String mRecordPath = Environment.getExternalStorageDirectory().getAbsolutePath() + "/MediaStudy/"
+            + TimeUtils.date2String(new Date()) + ".pcm";
+    private long mRecordStartTime;
+    private Handler mTimeHandler;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -42,6 +62,7 @@ public class MainActivity extends AppCompatActivity {
         mMediaTest = new MediaTest();
         requestPermission();
 
+        init();
         initAudioEngine();
     }
 
@@ -49,22 +70,18 @@ public class MainActivity extends AppCompatActivity {
     protected void onPause() {
         super.onPause();
 
-        mMediaTest.playClip(0, 0);
         mIsPlayingAssets = false;
         mMediaTest.playAssets(false);
         mIsPlayingPcm = false;
         mMediaTest.playPCM(false);
     }
 
+    private void init() {
+        mTimeHandler = new Handler();
+    }
+
     private void initAudioEngine() {
         mMediaTest.createEngine();
-
-        AudioManager myAudioMgr = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-        String nativeParam = myAudioMgr.getProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE);
-        int sampleRate = Integer.parseInt(nativeParam);
-        nativeParam = myAudioMgr.getProperty(AudioManager.PROPERTY_OUTPUT_FRAMES_PER_BUFFER);
-        int bufSize = Integer.parseInt(nativeParam);
-        mMediaTest.createBufferQueueAudioPlayer(sampleRate, bufSize);
     }
 
     /**
@@ -90,21 +107,15 @@ public class MainActivity extends AppCompatActivity {
                 });
     }
 
-    @OnClick({R.id.main_hello_btn, R.id.main_android_btn, R.id.main_assets_btn,
-            R.id.main_pcm_btn, R.id.main_recorder_btn, R.id.main_play_back_btn,
-            R.id.main_record_video_btn})
+    @OnClick({R.id.main_assets_btn, R.id.main_pcm_btn, R.id.main_recorder_btn,
+            R.id.main_play_back_btn, R.id.main_record_video_btn})
     public void onViewClicked(View view) {
         switch (view.getId()) {
-            case R.id.main_hello_btn:
-                mMediaTest.playClip(1, 5);
-                break;
-            case R.id.main_android_btn:
-                mMediaTest.playClip(2, 5);
-                break;
             case R.id.main_assets_btn:
                 if (!mAssetsPlayerCreated) {
                     mAssetsPlayerCreated = mMediaTest.createAssetsAudioPlayer(getAssets(), "background.mp3");
                 }
+
                 if (mAssetsPlayerCreated) {
                     mIsPlayingAssets = !mIsPlayingAssets;
                     mMediaTest.playAssets(mIsPlayingAssets);
@@ -124,11 +135,32 @@ public class MainActivity extends AppCompatActivity {
                 if (!mRecorderCreate) {
                     mRecorderCreate = mMediaTest.createAudioRecorder();
                 } else {
-                    mMediaTest.startRecord();
+                    //录制音频
+                    if (!mIsRecording) {
+                        mRecordStartTime = TimeUtils.date2Millis(new Date());
+                        mTimeHandler.postDelayed(mTimeRunnable, 0);
+
+                        mMediaTest.startRecord(mRecordPath);
+
+                        mIsRecording = true;
+                        mRecorderBtn.setText("停止录制");
+                    } else {
+                        mTimeHandler.removeCallbacks(mTimeRunnable);
+
+                        mMediaTest.stopRecord();
+
+                        mIsRecording = false;
+                        mRecorderBtn.setText("开始录制");
+                    }
                 }
                 break;
             case R.id.main_play_back_btn:
-                mMediaTest.playClip(3, 1);
+                if (mIsAudioPlayerCreate) {
+                    mIsAudioPlayerCreate = mMediaTest.createAudioPlayer(mRecordPath);
+                } else {
+                    mIsPlayingRecord = !mIsPlayingRecord;
+                    mMediaTest.playRecord(mIsPlayingRecord);
+                }
                 break;
             case R.id.main_record_video_btn:
                 Bundle recordVideoBundle = new Bundle();
@@ -140,9 +172,19 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private Runnable mTimeRunnable = new Runnable() {
+        @Override
+        public void run() {
+            mRecordTimeTv.setText(TimeUtils.millis2String(TimeUtils.date2Millis(new Date()) - mRecordStartTime,
+                    new SimpleDateFormat("HH:mm:ss", Locale.getDefault())));
+            mTimeHandler.postDelayed(this, 1000);
+        }
+    };
+
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        mMediaTest.shutdown();
         mMediaTest.destroy();
         if (mDisposable != null) {
             mDisposable.dispose();

@@ -10,5 +10,5 @@ AudioContext::AudioContext(FILE *pFile, uint8_t *buffer, size_t bufferSize)
 AudioContext::~AudioContext() {
     fclose(pFile);
     delete buffer;
-    delete bufferSize;
+    bufferSize = 0;
 }

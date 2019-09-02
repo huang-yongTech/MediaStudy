@@ -8,16 +8,11 @@ public class MediaTest {
         init();
     }
 
-
     private native void init();
 
     public native void destroy();
 
     public native void createEngine();
-
-    public native void createBufferQueueAudioPlayer(int sampleRate, int bufSize);
-
-    public native void playClip(int which, int count);
 
     public native boolean createAssetsAudioPlayer(AssetManager assetManager, String fileName);
 
@@ -29,9 +24,11 @@ public class MediaTest {
 
     public native boolean createAudioRecorder();
 
-    public native void startRecord();
+    public native void startRecord(String filePath);
 
     public native void stopRecord();
+
+    public native boolean createAudioPlayer(String filePath);
 
     public native void playRecord(boolean isPlaying);
 

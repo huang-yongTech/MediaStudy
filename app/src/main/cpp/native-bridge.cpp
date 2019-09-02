@@ -38,29 +38,20 @@ void createEngine(JNIEnv *env, jobject instance) {
     createEngine_();
 }
 
-void createBufferQueueAudioPlayer(JNIEnv *env, jobject instance,
-                                  jint sampleRate, jint bufSize) {
-    createBufferQueueAudioPlayer_(sampleRate, bufSize);
-}
-
-void playClip(JNIEnv *env, jobject instance, jint which, jint count) {
-    playClip_(which, count);
-}
-
 //参数含有安卓相关参数的最好使用静态注册，动态注册在方法签名上面会有一些未知错误
 JNIEXPORT jboolean JNICALL
 Java_com_hy_ndk_mediastudy_MediaTest_createAssetsAudioPlayer(JNIEnv *env, jobject instance,
                                                              jobject assetManager,
-                                                             jstring fileName) {
-    return createAssetsAudioPlayer_(env, instance, assetManager, fileName);
+                                                             jstring filePath) {
+    return createAssetsAudioPlayer_(env, instance, assetManager, filePath);
 }
 
 void playAssets(JNIEnv *env, jobject instance, jboolean isPlaying) {
     playAssets_(isPlaying);
 }
 
-jboolean createPcmAudioPlayer(JNIEnv *env, jobject instance, jstring fileName) {
-    return createPcmAudioPlayer_(env, instance, fileName);
+jboolean createPcmAudioPlayer(JNIEnv *env, jobject instance, jstring filePath) {
+    return createPcmAudioPlayer_(env, instance, filePath);
 }
 
 void playPCM(JNIEnv *env, jobject instance, jboolean isPlaying) {
@@ -71,12 +62,16 @@ jboolean createAudioRecorder(JNIEnv *env, jobject instance) {
     return createAudioRecorder_();
 }
 
-void startRecord(JNIEnv *env, jobject instance) {
-    startRecord_();
+void startRecord(JNIEnv *env, jobject instance, jstring filePath) {
+    startRecord_(env, instance, filePath);
 }
 
 void stopRecord(JNIEnv *env, jobject instance) {
     stopRecord_();
+}
+
+jboolean createAudioPlayer(JNIEnv *env, jobject instance, jstring filePath) {
+    return createAudioPlayer_(env, instance, filePath);
 }
 
 void playRecord(JNIEnv *env, jobject instance, jboolean isPlaying) {
@@ -89,19 +84,18 @@ void shutdown(JNIEnv *env, jobject instance) {
 
 //静态的native方法签名数组
 static const JNINativeMethod method[] = {
-        {"init",                         "()V",                   (void *) init},
-        {"destroy",                      "()V",                   (void *) destroy},
-        {"createEngine",                 "()V",                   (void *) createEngine},
-        {"createBufferQueueAudioPlayer", "(II)V",                 (void *) createBufferQueueAudioPlayer},
-        {"playClip",                     "(II)V",                 (void *) playClip},
-        {"playAssets",                   "(Z)V",                  (void *) playAssets},
-        {"createPcmAudioPlayer",         "(Ljava/lang/String;)Z", (void *) createPcmAudioPlayer},
-        {"playPCM",                      "(Z)V",                  (void *) playPCM},
-        {"createAudioRecorder",          "()Z",                   (void *) createAudioRecorder},
-        {"startRecord",                  "()V",                   (void *) startRecord},
-        {"stopRecord",                   "()V",                   (void *) stopRecord},
-        {"playRecord",                   "(Z)V",                  (void *) playRecord},
-        {"shutdown",                     "()V",                   (void *) shutdown},
+        {"init", "()V", (void *) init},
+        {"destroy", "()V", (void *) destroy},
+        {"createEngine", "()V", (void *) createEngine},
+        {"playAssets", "(Z)V", (void *) playAssets},
+        {"createPcmAudioPlayer", "(Ljava/lang/String;)Z", (void *) createPcmAudioPlayer},
+        {"playPCM", "(Z)V", (void *) playPCM},
+        {"createAudioRecorder", "()Z", (void *) createAudioRecorder},
+        {"startRecord", "(Ljava/lang/String;)V", (void *) startRecord},
+        {"stopRecord", "()V", (void *) stopRecord},
+        {"createAudioPlayer", "(Ljava/lang/String;)Z", (void *) createAudioPlayer},
+        {"playRecord", "(Z)V", (void *) playRecord},
+        {"shutdown", "()V", (void *) shutdown},
 };
 
 /**
