@@ -12,6 +12,8 @@ public class MediaTest {
 
     public native void destroy();
 
+    public native void setBufferSizeInSize(int bufferSizeInBytes);
+
     public native void createEngine();
 
     public native boolean createAssetsAudioPlayer(AssetManager assetManager, String fileName);

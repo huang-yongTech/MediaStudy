@@ -6,6 +6,7 @@
 #define MEDIASTUDY_AUDIOCONTEXT_H
 
 #include <stdio.h>
+#include <SLES/OpenSLES.h>
 
 /**
  * 音频缓存相关配置
@@ -19,6 +20,8 @@ public:
     uint8_t *buffer;
     //缓存数据大小
     size_t bufferSize;
+
+    AudioContext();
 
     AudioContext(FILE *pFile, uint8_t *buffer, size_t bufferSize);
 

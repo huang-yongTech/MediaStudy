@@ -2,15 +2,19 @@ package com.hy.ndk.mediastudy.activity;
 
 import android.Manifest;
 import android.content.Intent;
+import android.media.AudioFormat;
+import android.media.AudioRecord;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.support.v7.app.AppCompatActivity;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
 
 import com.hy.jni.base.Constant;
+import com.hy.jni.base.FileUtils;
 import com.hy.jni.base.TimeUtils;
 import com.hy.ndk.mediastudy.MediaTest;
 import com.hy.ndk.mediastudy.R;
@@ -28,6 +32,7 @@ import io.reactivex.disposables.Disposable;
 import io.reactivex.functions.Consumer;
 
 public class MainActivity extends AppCompatActivity {
+    private static final String TAG = "MainActivity";
 
     @BindView(R.id.main_recorder_tv)
     TextView mRecordTimeTv;
@@ -48,8 +53,8 @@ public class MainActivity extends AppCompatActivity {
     private boolean mIsRecording;
     private boolean mIsAudioPlayerCreate;
 
-    private String mRecordPath = Environment.getExternalStorageDirectory().getAbsolutePath() + "/MediaStudy/"
-            + TimeUtils.date2String(new Date()) + ".pcm";
+    private String mRecordPath;
+    private String mRecordFile;
     private long mRecordStartTime;
     private Handler mTimeHandler;
 
@@ -59,7 +64,6 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         ButterKnife.bind(this);
 
-        mMediaTest = new MediaTest();
         requestPermission();
 
         init();
@@ -74,13 +78,26 @@ public class MainActivity extends AppCompatActivity {
         mMediaTest.playAssets(false);
         mIsPlayingPcm = false;
         mMediaTest.playPCM(false);
+        mIsPlayingRecord = false;
+        mMediaTest.playRecord(false);
     }
 
     private void init() {
+        mMediaTest = new MediaTest();
         mTimeHandler = new Handler();
+
+        mRecordPath = Environment.getExternalStorageDirectory().getAbsolutePath() + "/MediaStudy/";
+        FileUtils.createOrExistsDir(mRecordPath);
     }
 
     private void initAudioEngine() {
+        int sampleRateInHz = 44100;
+        int channelConfig = AudioFormat.CHANNEL_OUT_STEREO;
+        int audioFormat = AudioFormat.ENCODING_PCM_16BIT;
+        int bufferSizeInBytes = AudioRecord.getMinBufferSize(sampleRateInHz, channelConfig, audioFormat) * 2;
+        //获取设备最小缓冲区
+        mMediaTest.setBufferSizeInSize(bufferSizeInBytes);
+
         mMediaTest.createEngine();
     }
 
@@ -137,10 +154,14 @@ public class MainActivity extends AppCompatActivity {
                 } else {
                     //录制音频
                     if (!mIsRecording) {
+                        mRecordFile = TimeUtils.date2String(new Date()) + ".pcm";
+
                         mRecordStartTime = TimeUtils.date2Millis(new Date());
                         mTimeHandler.postDelayed(mTimeRunnable, 0);
 
-                        mMediaTest.startRecord(mRecordPath);
+                        mMediaTest.startRecord(mRecordPath + mRecordFile);
+
+                        Log.i(TAG, "音频路径: " + mRecordPath + mRecordFile);
 
                         mIsRecording = true;
                         mRecorderBtn.setText("停止录制");
@@ -155,9 +176,13 @@ public class MainActivity extends AppCompatActivity {
                 }
                 break;
             case R.id.main_play_back_btn:
+                if (!mIsAudioPlayerCreate) {
+                    mIsAudioPlayerCreate = mMediaTest.createAudioPlayer(mRecordPath + mRecordFile);
+                }
+
                 if (mIsAudioPlayerCreate) {
-                    mIsAudioPlayerCreate = mMediaTest.createAudioPlayer(mRecordPath);
-                } else {
+                    Log.i(TAG, "音频播放路径: " + mRecordPath + mRecordFile);
+
                     mIsPlayingRecord = !mIsPlayingRecord;
                     mMediaTest.playRecord(mIsPlayingRecord);
                 }
@@ -186,6 +211,8 @@ public class MainActivity extends AppCompatActivity {
         super.onDestroy();
         mMediaTest.shutdown();
         mMediaTest.destroy();
+
+        mTimeHandler.removeCallbacks(mTimeRunnable);
         if (mDisposable != null) {
             mDisposable.dispose();
         }
