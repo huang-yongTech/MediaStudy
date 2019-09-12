@@ -74,12 +74,12 @@ void stopRecord(JNIEnv *env, jobject instance) {
     stopRecord_();
 }
 
-jboolean createAudioPlayer(JNIEnv *env, jobject instance, jstring filePath) {
-    return createAudioPlayer_(env, instance, filePath);
+jboolean createAudioPlayer(JNIEnv *env, jobject instance) {
+    return createAudioPlayer_();
 }
 
-void playRecord(JNIEnv *env, jobject instance, jboolean isPlaying) {
-    playRecord_(isPlaying);
+void playRecord(JNIEnv *env, jobject instance, jstring filePath, jboolean isPlaying) {
+    playRecord_(env, instance, filePath, isPlaying);
 }
 
 void shutdown(JNIEnv *env, jobject instance) {
@@ -88,19 +88,19 @@ void shutdown(JNIEnv *env, jobject instance) {
 
 //静态的native方法签名数组
 static const JNINativeMethod method[] = {
-        {"init",                 "()V",                   (void *) init},
-        {"destroy",              "()V",                   (void *) destroy},
-        {"setBufferSizeInSize",  "(I)V",                  (void *) setBufferSizeInSize},
-        {"createEngine",         "()V",                   (void *) createEngine},
-        {"playAssets",           "(Z)V",                  (void *) playAssets},
-        {"createPcmAudioPlayer", "(Ljava/lang/String;)Z", (void *) createPcmAudioPlayer},
-        {"playPCM",              "(Z)V",                  (void *) playPCM},
-        {"createAudioRecorder",  "()Z",                   (void *) createAudioRecorder},
-        {"startRecord",          "(Ljava/lang/String;)V", (void *) startRecord},
-        {"stopRecord",           "()V",                   (void *) stopRecord},
-        {"createAudioPlayer",    "(Ljava/lang/String;)Z", (void *) createAudioPlayer},
-        {"playRecord",           "(Z)V",                  (void *) playRecord},
-        {"shutdown",             "()V",                   (void *) shutdown},
+        {"init",                 "()V",                    (void *) init},
+        {"destroy",              "()V",                    (void *) destroy},
+        {"setBufferSizeInSize",  "(I)V",                   (void *) setBufferSizeInSize},
+        {"createEngine",         "()V",                    (void *) createEngine},
+        {"playAssets",           "(Z)V",                   (void *) playAssets},
+        {"createPcmAudioPlayer", "(Ljava/lang/String;)Z",  (void *) createPcmAudioPlayer},
+        {"playPCM",              "(Z)V",                   (void *) playPCM},
+        {"createAudioRecorder",  "()Z",                    (void *) createAudioRecorder},
+        {"startRecord",          "(Ljava/lang/String;)V",  (void *) startRecord},
+        {"stopRecord",           "()V",                    (void *) stopRecord},
+        {"createAudioPlayer",    "()Z",                    (void *) createAudioPlayer},
+        {"playRecord",           "(Ljava/lang/String;Z)V", (void *) playRecord},
+        {"shutdown",             "()V",                    (void *) shutdown},
 };
 
 /**

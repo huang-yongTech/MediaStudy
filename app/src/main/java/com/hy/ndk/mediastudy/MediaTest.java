@@ -30,9 +30,9 @@ public class MediaTest {
 
     public native void stopRecord();
 
-    public native boolean createAudioPlayer(String filePath);
+    public native boolean createAudioPlayer();
 
-    public native void playRecord(boolean isPlaying);
+    public native void playRecord(String filePath, boolean isPlaying);
 
     public native void shutdown();
 }

@@ -1,7 +1,6 @@
 //
 // Created by huangyong on 2019/9/1.
 //
-#include <malloc.h>
 #include "AudioContext.h"
 
 AudioContext::AudioContext()

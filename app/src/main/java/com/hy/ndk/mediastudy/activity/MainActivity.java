@@ -79,7 +79,7 @@ public class MainActivity extends AppCompatActivity {
         mIsPlayingPcm = false;
         mMediaTest.playPCM(false);
         mIsPlayingRecord = false;
-        mMediaTest.playRecord(false);
+        mMediaTest.playRecord(mRecordPath + mRecordFile, false);
     }
 
     private void init() {
@@ -177,14 +177,14 @@ public class MainActivity extends AppCompatActivity {
                 break;
             case R.id.main_play_back_btn:
                 if (!mIsAudioPlayerCreate) {
-                    mIsAudioPlayerCreate = mMediaTest.createAudioPlayer(mRecordPath + mRecordFile);
+                    mIsAudioPlayerCreate = mMediaTest.createAudioPlayer();
                 }
 
                 if (mIsAudioPlayerCreate) {
                     Log.i(TAG, "音频播放路径: " + mRecordPath + mRecordFile);
 
                     mIsPlayingRecord = !mIsPlayingRecord;
-                    mMediaTest.playRecord(mIsPlayingRecord);
+                    mMediaTest.playRecord(mRecordPath + mRecordFile, mIsPlayingRecord);
                 }
                 break;
             case R.id.main_record_video_btn:

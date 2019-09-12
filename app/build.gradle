@@ -29,6 +29,12 @@ android {
         }
     }
 
+    sourceSets {
+        main {
+            jniLibs.srcDirs = ['ffmpeg-lib/libs']
+        }
+    }
+
     externalNativeBuild {
         cmake {
             path "CMakeLists.txt"

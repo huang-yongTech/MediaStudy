@@ -57,6 +57,7 @@ SLVolumeItf fdPlayerVolume;
  */
 SLObjectItf pcmPlayerObject = nullptr;
 SLPlayItf pcmPlayerPlay = nullptr;
+//SLSeekItf好像不能和缓冲队列一起使用
 SLSeekItf pcmPlayerSeek;
 SLVolumeItf pcmPlayerVolume = nullptr;
 //缓冲区队列
@@ -82,6 +83,7 @@ static size_t AUDIO_BUFFER_SIZE = BUFFER_SIZE_IN_BYTES;
 SLObjectItf audioPlayerObject;
 SLPlayItf audioPlayerPlay;
 SLAndroidSimpleBufferQueueItf audioBufferQueue;
+SLAndroidSimpleBufferQueueState audioBufferQuqueState;
 SLVolumeItf audioPlayerVolumn;
 
 // a mutext to guard against re-entrance to record & playback
@@ -339,6 +341,18 @@ void pcmBufferCallBack(SLAndroidSimpleBufferQueueItf bufferQueueItf, void *conte
     }
 }
 
+void pcmPlayEndCallback(SLPlayItf playItf, void *context, SLuint32 event) {
+    SLresult result;
+
+    if (event & SL_PLAYEVENT_HEADATEND) {
+        result = (*playItf)->SetPlayState(playItf, SL_PLAYSTATE_STOPPED);
+        assert(SL_RESULT_SUCCESS == result);
+        (void) result;
+
+        rewind(pcmFile);
+    }
+}
+
 /**
  * pcm文件音频播放
  * @param env
@@ -393,7 +407,7 @@ jboolean createPcmAudioPlayer_(JNIEnv *env, jobject instance, jstring filePath) 
     assert(SL_RESULT_SUCCESS == result);
     (void) result;
 
-    // get the play interface
+    //获取播放器接口
     result = (*pcmPlayerObject)->GetInterface(pcmPlayerObject, SL_IID_PLAY, &pcmPlayerPlay);
     assert(SL_RESULT_SUCCESS == result);
     (void) result;
@@ -408,10 +422,20 @@ jboolean createPcmAudioPlayer_(JNIEnv *env, jobject instance, jstring filePath) 
     assert(SL_RESULT_SUCCESS == result);
     (void) result;
 
-    // get the volume interface
-//    result = (*pcmPlayerObject)->GetInterface(pcmPlayerObject, SL_IID_VOLUME, &pcmPlayerVolume);
-//    assert(SL_RESULT_SUCCESS == result);
-//    (void) result;
+    //获取音量接口
+    result = (*pcmPlayerObject)->GetInterface(pcmPlayerObject, SL_IID_VOLUME, &pcmPlayerVolume);
+    assert(SL_RESULT_SUCCESS == result);
+    (void) result;
+
+    //注册播放结束回调
+    result = (*pcmPlayerPlay)->RegisterCallback(pcmPlayerPlay, pcmPlayEndCallback, nullptr);
+    assert(SL_RESULT_SUCCESS == result);
+    (void) result;
+
+    //设置播放结束回调
+    result = (*pcmPlayerPlay)->SetCallbackEventsMask(pcmPlayerPlay, SL_PLAYEVENT_HEADATEND);
+    assert(SL_RESULT_SUCCESS == result);
+    (void) result;
 
     pcmBufferCallBack(pcmBufferQueue, nullptr);
 
@@ -461,7 +485,6 @@ void audioRecorderCallback(SLAndroidSimpleBufferQueueItf bufferQueueItf, void *c
 
     // for streaming recording, here we would call Enqueue to give recorder the next buffer to fill
     // but instead, this is a one-time buffer so we stop recording
-    //谷歌的官方例子是只录制一个指定时间（大概5秒左右）的音频，这里修改了下，录制时间由我们自己手动控制
     if (nullptr != audioContext->buffer) {
         fwrite(audioContext->buffer, audioContext->bufferSize, 1, audioContext->pFile);
 
@@ -496,7 +519,8 @@ void audioPlayerCallback(SLAndroidSimpleBufferQueueItf bufferQueueItf, void *con
 
     //开始读取文件
     if (!feof(audioContext->pFile)) {
-        fread(audioContext->buffer, audioContext->bufferSize, 1, audioContext->pFile);
+        fread(audioContext->buffer, audioContext->bufferSize, 1,
+              audioContext->pFile);
         if (audioContext->buffer == nullptr) {
             LOGI("%s", "read end");
         } else {
@@ -539,9 +563,7 @@ jboolean createAudioRecorder_() {
     //创建audio recorder，需要RECORD_AUDIO权限
     const SLInterfaceID id[2] = {SL_IID_RECORD, SL_IID_ANDROIDSIMPLEBUFFERQUEUE};
     const SLboolean req[2] = {SL_BOOLEAN_TRUE, SL_BOOLEAN_TRUE};
-    result = (*engineEngine)->CreateAudioRecorder(engineEngine,
-                                                  &recorderObject,
-                                                  &audioSrc,
+    result = (*engineEngine)->CreateAudioRecorder(engineEngine, &recorderObject, &audioSrc,
                                                   &audioSnk,
                                                   2, id, req);
     if (SL_RESULT_SUCCESS != result) {
@@ -576,9 +598,8 @@ jboolean createAudioRecorder_() {
     assert(SL_RESULT_SUCCESS == result);
     (void) result;
 
-    result = (*recorderRecord)->SetCallbackEventsMask(recorderRecord,
-                                                      SL_RECORDEVENT_HEADATMARKER |
-                                                      SL_RECORDEVENT_HEADATNEWPOS);
+    result = (*recorderRecord)->SetCallbackEventsMask(recorderRecord, SL_RECORDEVENT_HEADATMARKER |
+                                                                      SL_RECORDEVENT_HEADATNEWPOS);
     assert(SL_RESULT_SUCCESS == result);
     (void) result;
 
@@ -651,15 +672,7 @@ void stopRecord_() {
  * 创建录音音频播放器
  * @return
  */
-jboolean createAudioPlayer_(JNIEnv *env, jobject instance, jstring filePath) {
-    const char *audioPath = env->GetStringUTFChars(filePath, nullptr);
-    FILE *pFile = fopen(audioPath, "re");
-    if (pFile == nullptr) {
-        LOGE("open file %s error", audioPath);
-        return JNI_FALSE;
-    }
-    env->ReleaseStringUTFChars(filePath, audioPath);
-
+jboolean createAudioPlayer_() {
     SLresult result;
 
     //输入源
@@ -704,15 +717,6 @@ jboolean createAudioPlayer_(JNIEnv *env, jobject instance, jstring filePath) {
     assert(SL_RESULT_SUCCESS == result);
     (void) result;
 
-    uint8_t *buffer = new uint8_t[AUDIO_BUFFER_SIZE];
-    audioContext = new AudioContext(pFile, buffer, AUDIO_BUFFER_SIZE);
-    //注册播放音频回调函数
-    result = (*audioBufferQueue)->RegisterCallback(audioBufferQueue, audioPlayerCallback,
-                                                   audioContext);
-    assert(SL_RESULT_SUCCESS == result);
-    (void) result;
-    audioPlayerCallback(audioBufferQueue, audioContext);
-
     result = (*audioPlayerObject)->GetInterface(audioPlayerObject, SL_IID_VOLUME,
                                                 &audioPlayerVolumn);
     assert(SL_RESULT_SUCCESS == result);
@@ -725,14 +729,36 @@ jboolean createAudioPlayer_(JNIEnv *env, jobject instance, jstring filePath) {
  * 播放录制的音频
  * @param isPlaying
  */
-void playRecord_(jboolean isPlaying) {
-    if (nullptr != audioPlayerPlay) {
-        SLresult result = (*audioPlayerPlay)->SetPlayState(audioPlayerPlay,
-                                                           isPlaying ? SL_PLAYSTATE_PLAYING
-                                                                     : SL_PLAYSTATE_STOPPED);
+void playRecord_(JNIEnv *env, jobject instance, jstring filePath, jboolean isPlaying) {
+    const char *audioPath = env->GetStringUTFChars(filePath, nullptr);
+    FILE *pFile = fopen(audioPath, "re");
+    if (pFile == nullptr) {
+        LOGE("open file %s error", audioPath);
+        return;
+    }
+    env->ReleaseStringUTFChars(filePath, audioPath);
+
+    uint8_t *buffer = new uint8_t[AUDIO_BUFFER_SIZE];
+    audioContext = new AudioContext(pFile, buffer, AUDIO_BUFFER_SIZE);
+
+    SLresult result;
+
+    result = (*audioBufferQueue)->GetState(audioBufferQueue, &audioBufferQuqueState);
+    assert(SL_RESULT_SUCCESS == result);
+    (void) result;
+
+    if (audioBufferQuqueState.count == 0) {
+        result = (*audioBufferQueue)->RegisterCallback(audioBufferQueue, audioPlayerCallback,
+                                                       audioContext);
         assert(SL_RESULT_SUCCESS == result);
         (void) result;
+        audioPlayerCallback(audioBufferQueue, audioContext);
     }
+
+    result = (*audioPlayerPlay)->SetPlayState(audioPlayerPlay, isPlaying ? SL_PLAYSTATE_PLAYING
+                                                                         : SL_PLAYSTATE_STOPPED);
+    assert(SL_RESULT_SUCCESS == result);
+    (void) result;
 }
 
 #endif //MEDIASTUDY_OPENSL_ES_TEST_C
